@@ -11,5 +11,4 @@ Option 2 - installable app with its own icon (phone or computer): this folder mu
     Computer (Chrome/Edge): the install icon in the address bar.
  3. After the first visit it runs fully offline from its icon.
 
-Your log stays on the device. Use Log > Backup > Export log to keep a copy or move it to another device,
-and Import log on the other side.
+Your log and lifts are stored on the device you use the app on.
