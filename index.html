@@ -217,6 +217,25 @@ dialog::backdrop{background:#000c}
   .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
 }
 @media(min-width:701px){nav a svg{display:none}}
+/* full-screen timer */
+.clock[data-fs]{position:fixed;inset:0;z-index:100;margin:0;border:0;border-radius:0;box-shadow:none;display:flex;flex-direction:column;justify-content:center;overflow:hidden;
+  padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.clock[data-fs]::before{border-radius:0}
+.clock[data-fs] .digits{font-size:min(33vw,34vh);margin:2vh 0}
+.clock[data-fs] .ctl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:3vh}
+.clock[data-fs] #tStart{grid-column:1/-1;min-height:72px;font-size:32px}.clock[data-fs] .ctl.nr #tFull{grid-column:1/-1}
+body.fsopen{overflow:hidden}
+@media(orientation:landscape){
+  .clock[data-fs]{display:grid;grid-template-columns:minmax(0,1fr) clamp(170px,26vw,260px);grid-template-rows:auto 1fr auto auto auto;column-gap:clamp(14px,3vw,32px);align-content:stretch}
+  .clock[data-fs] .chead{grid-column:1;grid-row:1}.clock[data-fs] .chead h2{font-size:clamp(16px,2.4vw,24px)}
+  .clock[data-fs] .digits{grid-column:1;grid-row:2;align-self:center;font-size:min(23vw,52vh);margin:0}
+  .clock[data-fs] .phase{grid-column:1;grid-row:3;font-size:clamp(18px,3.2vh,30px)}
+  .clock[data-fs] .mov{grid-column:1;grid-row:4;font-size:clamp(16px,3.2vh,28px);min-height:0}
+  .clock[data-fs] .bar{grid-column:1;grid-row:5;margin:1.5vh 0 0}
+  .clock[data-fs] .ctl{grid-column:2;grid-row:1/-1;display:flex;flex-direction:column;justify-content:center;gap:clamp(6px,1.4vh,10px);margin:0}
+  .clock[data-fs] .ctl button{flex:1 1 0;min-height:36px;max-height:72px;padding:4px 10px;font-size:clamp(16px,3.4vh,22px)}
+  .clock[data-fs] #tStart{flex:1.6 1 0;min-height:48px;max-height:110px;font-size:clamp(22px,5vh,34px)}
+}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <header class="band" style="padding-block:10px"><div class="wrap">
@@ -775,7 +794,13 @@ function finish(auto){const c=T.c;if(!c||(!T.run&&!T.acc))return;const e=Math.ma
   if(!T.next)setTimeout(()=>openSave(T.w,T.part==='wod'?score:''),auto?900:200)}
 $('#tStart').addEventListener('click',startPause);$('#tRound').addEventListener('click',addRound);
 $('#tFinish').addEventListener('click',()=>finish(false));$('#tReset').addEventListener('click',resetT);
-$('#tFull').addEventListener('click',()=>{try{const p=document.fullscreenElement?document.exitFullscreen():$('#clock').requestFullscreen();p&&p.catch&&p.catch(()=>{})}catch(e){}});
+function setFs(on){const c=$('#clock');if(on)c.setAttribute('data-fs','');else c.removeAttribute('data-fs');document.body.classList.toggle('fsopen',on);$('#tFull').textContent=on?'Exit full screen':'Full screen'}
+$('#tFull').addEventListener('click',()=>{const c=$('#clock'),on=c.hasAttribute('data-fs');
+  if(on){setFs(false);try{document.fullscreenElement&&document.exitFullscreen().catch(()=>{})}catch(e){}return}
+  setFs(true);try{const p=c.requestFullscreen&&c.requestFullscreen({navigationUI:'hide'});p&&p.catch&&p.catch(()=>{})}catch(e){}});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&$('#clock').hasAttribute('data-fs'))setFs(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#clock').hasAttribute('data-fs')&&!document.fullscreenElement)setFs(false)});
+window.addEventListener('hashchange',()=>{if(location.hash!=='#timer'&&$('#clock').hasAttribute('data-fs')){setFs(false);try{document.fullscreenElement&&document.exitFullscreen().catch(()=>{})}catch(e){}}});
 document.addEventListener('keydown',e=>{if(!$('#v-timer').classList.contains('on')||$('#dlg').open||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
   if(e.code==='Space'){e.preventDefault();startPause()}else if(e.key==='r'||e.key==='R')addRound()});
 
