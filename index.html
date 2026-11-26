@@ -225,17 +225,23 @@ dialog::backdrop{background:#000c}
 .clock[data-fs] .ctl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:3vh}
 .clock[data-fs] #tStart{grid-column:1/-1;min-height:72px;font-size:32px}.clock[data-fs] .ctl.nr #tFull{grid-column:1/-1}
 body.fsopen{overflow:hidden}
+.fsb{display:none}
+.clock[data-fs] .fsb{display:block;margin-top:2vh;background:#0b0b0c;border:1px solid #222;border-radius:4px;padding:10px 14px;overflow:auto;max-height:30vh}
+.clock[data-fs] .fsb h3{font-size:18px;color:var(--red);margin-bottom:4px}
+.clock[data-fs] .fsb li{font-size:clamp(16px,2.4vh,22px);color:#fff;padding:6px 0;border-color:#26262a}.clock[data-fs] .fsb li.cur{color:var(--red);padding-left:14px}
 @media(orientation:landscape){
-  .clock[data-fs]{display:grid;grid-template-columns:minmax(0,1fr) clamp(170px,26vw,260px);grid-template-rows:auto 1fr auto auto auto;column-gap:clamp(14px,3vw,32px);align-content:stretch}
+  .clock[data-fs]{display:grid;grid-template-columns:minmax(0,1fr) clamp(210px,32vw,420px);grid-template-rows:auto 1fr auto auto auto auto;column-gap:clamp(14px,2.5vw,30px);align-content:stretch}
   .clock[data-fs] .chead{grid-column:1;grid-row:1}.clock[data-fs] .chead h2{font-size:clamp(16px,2.4vw,24px)}
-  .clock[data-fs] .digits{grid-column:1;grid-row:2;align-self:center;font-size:min(23vw,52vh);margin:0}
-  .clock[data-fs] .phase{grid-column:1;grid-row:3;font-size:clamp(18px,3.2vh,30px)}
-  .clock[data-fs] .mov{grid-column:1;grid-row:4;font-size:clamp(16px,3.2vh,28px);min-height:0}
-  .clock[data-fs] .bar{grid-column:1;grid-row:5;margin:1.5vh 0 0}
-  .clock[data-fs] .ctl{grid-column:2;grid-row:1/-1;display:flex;flex-direction:column;justify-content:center;gap:clamp(6px,1.4vh,10px);margin:0}
-  .clock[data-fs] .ctl button{flex:1 1 0;min-height:36px;max-height:72px;padding:4px 10px;font-size:clamp(16px,3.4vh,22px)}
-  .clock[data-fs] #tStart{flex:1.6 1 0;min-height:48px;max-height:110px;font-size:clamp(22px,5vh,34px)}
+  .clock[data-fs] .digits{grid-column:1;grid-row:2;align-self:center;font-size:min(16.5vw,44vh);margin:0}
+  .clock[data-fs] .phase{grid-column:1;grid-row:3;font-size:clamp(17px,3.2vh,28px)}
+  .clock[data-fs] .mov{grid-column:1;grid-row:4;font-size:clamp(15px,3vh,26px);min-height:0}
+  .clock[data-fs] .bar{grid-column:1;grid-row:5;margin:1vh 0 0}
+  .clock[data-fs] .ctl{grid-column:1;grid-row:6;display:flex;flex-wrap:nowrap;gap:8px;margin:1.6vh 0 0}
+  .clock[data-fs] .ctl button{flex:1 1 0;min-height:clamp(42px,12vh,64px);padding:4px 6px;font-size:clamp(14px,3.2vh,20px);line-height:1.05}
+  .clock[data-fs] #tStart{flex:1.5 1 0;min-height:clamp(42px,12vh,64px);font-size:clamp(18px,4.4vh,28px)}
+  .clock[data-fs] .fsb{grid-column:2;grid-row:1/-1;margin:0;max-height:none;align-self:stretch}
 }
+
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <header class="band" style="padding-block:10px"><div class="wrap">
@@ -256,7 +262,7 @@ body.fsopen{overflow:hidden}
     <div class="card" data-col="gen">
       <h2>Generate</h2>
       <label for="gFmt">Workout type</label>
-      <select id="gFmt"><option value="amrap">AMRAP</option><option value="fortime">For time (metcon)</option><option value="emom">EMOM</option><option value="tabata">Tabata</option><option value="intervals">Intervals</option></select>
+      <select id="gFmt"><option value="amrap">AMRAP</option><option value="fortime">For time (metcon)</option><option value="emom">EMOM</option><option value="tabata">Tabata</option><option value="intervals">Intervals</option><option value="random">Random (surprise me)</option></select>
       <label id="fLbl">Focus</label>
       <details class="dd" id="focusDD"><summary aria-labelledby="fLbl" id="fSum">Generic (full body)</summary>
         <div class="menu" id="fMenu"></div></details>
@@ -325,6 +331,7 @@ body.fsopen{overflow:hidden}
     <div class="phase" id="phase">Press start</div>
     <div class="mov" id="mov"></div>
     <div class="bar"><i id="prog"></i></div>
+    <div class="fsb" id="fsBoard"><h3 id="fsbH">The board</h3><ul class="blines" id="fsList"></ul></div>
     <div class="ctl">
       <button class="pri big" id="tStart">Start</button>
       <button class="big" id="tRound">+1 round</button>
@@ -572,7 +579,10 @@ function genWarmup(moves,st,eq,f,mins){
   if(mins&&mins<8)lines.splice(1,1);
   return {on:true,minutes:mins||(st?12:10),lines}}
 function generate(){
-  const fmt=$('#gFmt').value,T=+$('#gDur').value,lvl=+$('#gLvl').value,f=focus(),WU=$('#gWU').checked,ST=$('#gST').checked;
+  let fmt=$('#gFmt').value,rndNote='';
+  if(fmt==='random'){const all=['amrap','fortime','emom','tabata','intervals'],lastF=LOG.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const pool=all.filter(x=>x!==(lastF&&lastF.format)&&x!==generate.lastRnd);fmt=rnd(pool.length?pool:all);generate.lastRnd=fmt;rndNote=`Random pick: ${FMT[fmt]}. `}
+  const T=+$('#gDur').value,lvl=+$('#gLvl').value,f=focus(),WU=$('#gWU').checked,ST=$('#gST').checked;
   const eq=new Set(['bw',...$$('.eq:checked').map(c=>c.value)]);
   let avail=LIB.filter(m=>m.e.every(x=>eq.has(x)));const nAll=avail.length;avail=avail.filter(m=>!hurts(m.n).length);const nInj=nAll-avail.length;
   if(!avail.length){$('#why').textContent='Nothing left to program with this equipment and your injury settings. Tick more equipment or review your profile.';return}
@@ -617,7 +627,7 @@ function generate(){
     if(st&&st.last)why+=` ${st.m.n}: last done ${new Date(st.last.date+'T12:00:00').toLocaleDateString(undefined,{day:'numeric',month:'short'})} (${st.last.line.replace(st.m.n,'').trim()}); today follows the cycle.`;
     if(P.week===4)why+=' Deload week is a good time to retest a benchmark.'}
   if(nInj)why+=` Left out ${nInj} movement${nInj>1?'s':''} that load your ${injOn().map(k=>INJ[k][0].toLowerCase()).join(', ')}.`;
-  why=`${T}-min session: ${wuMin?wuMin+' warm-up · ':''}${stMin?stMin+' strength · ':''}${mcMin} metcon.${stNote} `+why;
+  why=rndNote+`${T}-min session: ${wuMin?wuMin+' warm-up · ':''}${stMin?stMin+' strength · ':''}${mcMin} metcon.${stNote} `+why;
   if(ST&&!stNote)why+=st?` Strength: ${st.m.n.toLowerCase()}, picked for ${f.length?'your focus':PARTS[st.m.p[0]].toLowerCase()}.`:' No strength lift fits the equipment ticked.';
   $('#why').textContent=why;
 }
@@ -733,7 +743,7 @@ function loadTimer(w,p){T.w=w;T.ps=partsList(w);T.part=T.ps.includes(p)?p:T.ps[0
   $('#segs').innerHTML=['warmup','strength','wod'].map(x=>T.ps.includes(x)?`<button data-seg="${x}" aria-pressed="${x===T.part}">${LBL[x]}</button>`:`<button data-add="${x}" class="off" title="Not on the board yet">+ ${LBL[x]}</button>`).join('');
   const pr=c.format==='amrap'||c.format==='warmup'||c.format==='emom'?`${c.minutes} min`:c.format==='fortime'?`${c.rounds?c.rounds+' rds · ':''}cap ${c.minutes} min`:c.format==='strength'?`${c.rounds} sets · rest ${fmtT(c.rest)}`:`${c.rounds} × ${c.work}s / ${c.rest}s`;
   $('#cName').textContent=`${FMT[c.format]} · ${pr}`;
-  $('#bLines').innerHTML=c.lines.map(l=>`<li>${esc(l)}</li>`).join('');
+  $('#bLines').innerHTML=$('#fsList').innerHTML=c.lines.map(l=>`<li>${esc(l)}</li>`).join('');$('#fsbH').textContent=LBL[T.part]||'The board';
   const r=['amrap','fortime','strength'].includes(c.format);$('#tRound').style.display=r?'':'none';$('.ctl').classList.toggle('nr',!r);$('#tRound').textContent=c.format==='strength'?'Set done':'+1 round';
   $('#spH').textContent=c.format==='strength'?'Sets':r?'Rounds':'Notes';
   $('#spNote').textContent=c.format==='strength'?'Tap “Set done” (or R) after each set; the rest countdown starts and beeps you back in.':r?'Tap “+1 round” (or press R) each time you finish a round. Space starts and pauses.':'The clock beeps on every change and in the last 3 seconds. Space starts and pauses.'}
@@ -764,12 +774,12 @@ function state(){const c=T.c,e=raw()-L(),t=tot(c);let o={d:'0:00',ph:'',mov:'',p
     else o.mov=wk?'Work through the board':'Rest'}
   return o}
 function draw(){const el=$('#clock'),c=T.c;if(!c){$('#dig').textContent='0:00';return}
-  if(T.done){el.className='clock done';$('#prog').style.width='100%';$$('#bLines li').forEach(l=>l.classList.remove('cur'));return}
+  if(T.done){el.className='clock done';$('#prog').style.width='100%';$$('#bLines li,#fsList li').forEach(l=>l.classList.remove('cur'));return}
   if(!T.run&&!T.acc){const v=c.format==='fortime'||c.format==='strength'?0:c.format==='emom'?60:c.format==='amrap'||c.format==='warmup'?tot(c):c.work;
     $('#dig').textContent=fmtT(v,true);$('#phase').textContent='Press start';$('#mov').textContent=c.format==='strength'?'Set 1 starts straight away':`${LEAD} s countdown first`;$('#prog').style.width='0';el.className='clock';return}
   const s=state();$('#dig').textContent=s.d;$('#phase').textContent=T.run?s.ph:'Paused · '+s.ph;$('#mov').textContent=s.mov;$('#prog').style.width=(s.prog*100)+'%';
   el.className='clock'+(s.rest?' rest':'')+(s.lead?' lead':'');
-  $$('#bLines li').forEach((l,i)=>l.classList.toggle('cur',s.cur===i));
+  ['#bLines','#fsList'].forEach(id=>$$(id+' li').forEach((l,i)=>l.classList.toggle('cur',s.cur===i)));
   if(T.run){if(T.seg!==null&&s.seg!==T.seg)beep(s.lead?660:s.rest?520:990,.55);
     const sc=Math.ceil(s.rem);if(sc!==T.sec&&sc<=3&&sc>0&&(s.lead||c.format!=='fortime'))beep(660,.12);T.sec=sc;T.seg=s.seg;
     if(s.end)finish(true)}}
@@ -794,7 +804,7 @@ function finish(auto){const c=T.c;if(!c||(!T.run&&!T.acc))return;const e=Math.ma
   if(!T.next)setTimeout(()=>openSave(T.w,T.part==='wod'?score:''),auto?900:200)}
 $('#tStart').addEventListener('click',startPause);$('#tRound').addEventListener('click',addRound);
 $('#tFinish').addEventListener('click',()=>finish(false));$('#tReset').addEventListener('click',resetT);
-function setFs(on){const c=$('#clock');if(on)c.setAttribute('data-fs','');else c.removeAttribute('data-fs');document.body.classList.toggle('fsopen',on);$('#tFull').textContent=on?'Exit full screen':'Full screen'}
+function setFs(on){const c=$('#clock');if(on)c.setAttribute('data-fs','');else c.removeAttribute('data-fs');document.body.classList.toggle('fsopen',on);$('#tFull').textContent=on?'Exit':'Full screen';$('#tFull').setAttribute('aria-label',on?'Exit full screen':'Full screen')}
 $('#tFull').addEventListener('click',()=>{const c=$('#clock'),on=c.hasAttribute('data-fs');
   if(on){setFs(false);try{document.fullscreenElement&&document.exitFullscreen().catch(()=>{})}catch(e){}return}
   setFs(true);try{const p=c.requestFullscreen&&c.requestFullscreen({navigationUI:'hide'});p&&p.catch&&p.catch(()=>{})}catch(e){}});
