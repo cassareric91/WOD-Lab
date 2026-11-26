@@ -140,6 +140,10 @@ button.big{font:italic 800 21px "Barlow Condensed",Barlow,system-ui,sans-serif;t
 .injn:focus-visible{outline:2px solid var(--red)}
 .sec[hidden]{display:none}.addsec{display:flex;gap:8px;margin-top:12px}.addsec[hidden]{display:none}.addsec button{flex:1;min-height:42px;border-style:dashed;font-size:15px;color:var(--mut)}.addsec button[hidden]{display:none}
 .sess{margin:10px 0 0;font-weight:700;font-size:15px}.sess:empty{display:none}.sess span{color:var(--mut);font-weight:600}
+.ac{position:absolute;z-index:60;background:#161618;border:1px solid #3a3a3e;border-radius:4px;box-shadow:0 16px 40px #000d;padding:4px;max-height:min(340px,46vh);overflow:auto}.ac[hidden]{display:none}
+.ac div{display:flex;flex-direction:column;gap:1px;padding:9px 10px;border-radius:3px;cursor:pointer;min-height:44px;justify-content:center}
+.ac div b{font-weight:700;font-size:16px}.ac div b mark{background:none;color:var(--red)}.ac div small{color:var(--mut);font-size:13px}.ac div small em{color:#ffb4ae;font-style:normal}
+.ac div.on,.ac div:hover{background:#2a0d0d}
 .prog{margin-top:14px;padding:12px;background:#0b0b0c;border:1px solid var(--line);border-radius:3px}.prog[hidden]{display:none}
 .prog .wk{display:flex;gap:4px;margin-bottom:8px}.prog .wk i{flex:1;height:8px;border-radius:2px;background:#26262a}.prog .wk i.done{background:#7a1414}.prog .wk i.now{background:var(--red);box-shadow:0 0 10px var(--red)}
 .prog b{font:italic 800 18px "Barlow Condensed",Barlow,system-ui,sans-serif;text-transform:uppercase}.prog p{margin:2px 0 0;font-size:14px;color:#c9c9cc}
@@ -419,6 +423,7 @@ body.fsopen{overflow:hidden}
   <button id="unErase" class="danger">Erase all data first</button></div>
   <div class="acts"><button class="pri big" id="unClose">Got it</button></div>
 </dialog>
+<div class="ac" id="ac" role="listbox" hidden></div>
 <div class="toast" id="toast"><span id="tMsg"></span><button id="tUndo">Undo</button></div>
 
 <script>
@@ -900,6 +905,52 @@ $('#lfTable').addEventListener('click',e=>{const t=e.target.closest('[data-lift]
 $('#lfCalc').addEventListener('input',e=>{if(e.target.id==='cusP')cusUpd()});
 $('#lfCalc').addEventListener('click',e=>{const d=e.target.closest('[data-ldel]');if(!d)return;const i=LIFTS.findIndex(x=>x.id===d.dataset.ldel);if(i<0)return;
   const [gone]=LIFTS.splice(i,1);persist();sHint();toast(`Deleted ${gone.lift} ${kgs(gone.kg)} kg`,()=>{LIFTS.splice(i,0,gone);persist();sHint()})});
+
+/* ---------- exercise suggestions ---------- */
+{
+const ac=$('#ac');let tgt=null,items=[],idx=0,rng=null;
+const clean=n=>n.replace(/\s*\(.*\)\s*$/,'');
+function pool(kind){const seen=new Set(),o=[];const add=x=>{const k=x.label.toLowerCase();if(!seen.has(k)){seen.add(k);o.push(x)}};
+  if(kind==='st'){STR.forEach(m=>{const sc=(SP[m.k]||SCH[m.k])[0][0];add({label:m.n,full:`${m.n} ${sc}`,sub:`${sc} · ${m.p.map(p=>PARTS[p]).join(', ')}`,n:m.n})});
+    LIFTNAMES.forEach(n=>add({label:n,full:`${n} 5×5 @ 70% 1RM`,sub:'5×5 @ 70% 1RM',n}))}
+  if(kind==='wu')Object.values(MOB).flat().forEach(x=>{const mm=x.match(/^(\S+)\s+(.+)$/);add({label:mm[2],full:x,sub:'Warm-up · '+mm[1],n:mm[2],keep:mm[1]})});
+  LIB.forEach(m=>add({label:clean(m.n),m,sub:[m.l&&loadFmt(m.l),m.p.map(p=>PARTS[p]).join(', ')].filter(Boolean).join(' · '),n:m.n}));
+  return o}
+function curLine(t){const v=t.value,c=t.selectionStart,st=v.lastIndexOf('\n',c-1)+1,en=v.indexOf('\n',c);return {v,c,st,en:en<0?v.length:en,txt:v.slice(st,c),idx:v.slice(0,st).split('\n').length-1}}
+const PRE=/^(\s*(?:max\s+|\d+(?:[.,]\d+)?(?:\s*(?:cal|m|km|s|sec|x|×|reps?))?\s+)?)(.*)$/i;
+function hl(label,q){const i=label.toLowerCase().indexOf(q.toLowerCase());return i<0?esc(label):esc(label.slice(0,i))+'<mark>'+esc(label.slice(i,i+q.length))+'</mark>'+esc(label.slice(i+q.length))}
+function show(t){const L=curLine(t),mm=L.txt.match(PRE),q=(mm[2]||'').trim();
+  if(q.length<1||!/[a-z]/i.test(q)||t.selectionStart!==t.selectionEnd){hide();return}
+  const ql=q.toLowerCase(),kind=t.id==='sLines'?'st':t.id==='wLines'?'wu':'mc';
+  const sc=x=>{const l=x.label.toLowerCase();return l.startsWith(ql)?0:l.split(/[\s-]+/).some(w=>w.startsWith(ql))?1:l.includes(ql)?2:9};
+  items=pool(kind).map(x=>[sc(x),x]).filter(a=>a[0]<9).sort((a,b)=>a[0]-b[0]||a[1].label.length-b[1].label.length).slice(0,8).map(a=>a[1]);
+  if(!items.length||(items.length===1&&items[0].label.toLowerCase()===ql)){hide();return}
+  tgt=t;rng={st:L.st,c:L.c,en:L.en,pre:mm[1]};idx=0;
+  ac.innerHTML=items.map((x,i)=>{const h=hurts(x.n||x.label);return `<div role="option" data-i="${i}" class="${i?'':'on'}"><b>${hl(x.label,q)}</b><small>${esc(x.sub||'')}${h.length?` <em>· careful: ${esc(h.map(k=>INJ[k][0].toLowerCase()).join(', '))}</em>`:''}</small></div>`}).join('');
+  const r=t.getBoundingClientRect(),lh=parseFloat(getComputedStyle(t).lineHeight)||32,pt=parseFloat(getComputedStyle(t).paddingTop)||0;
+  const top=Math.min(r.bottom,r.top+pt+(L.idx+1)*lh-t.scrollTop)+window.scrollY+2;
+  ac.style.left=(r.left+window.scrollX)+'px';ac.style.width=r.width+'px';ac.style.top=top+'px';ac.hidden=false;
+  const vh=(window.visualViewport?visualViewport.height+visualViewport.offsetTop:innerHeight)-(innerWidth<=700?80:8),h=ac.offsetHeight,lineTopV=top-window.scrollY-lh-2;
+  if(top-window.scrollY+h>vh&&lineTopV-h>60)ac.style.top=(lineTopV-h-2+window.scrollY)+'px'}
+function hide(){ac.hidden=true;tgt=null;items=[]}
+function pick(i){const x=items[i];if(!x||!tgt)return;const t=tgt,fmt=$('#eFmt').value;let line;const pre=rng.pre.trim();
+  if(x.m){if(pre){line=`${rng.pre}${x.m.n}${x.m.l?` (${loadFmt(x.m.l)})`:''}`}
+    else if(t.id==='eLines'&&fmt==='tabata')line=`Max ${x.m.n}${x.m.l?` (${loadFmt(x.m.l)})`:''}`;
+    else line=`${qty(x.m,t.id==='wLines'?.5:1)} ${x.m.n}${x.m.l?` (${loadFmt(x.m.l)})`:''}`}
+  else line=pre&&x.keep?`${rng.pre}${x.label}`:x.full;
+  const v=t.value,rest=v.slice(rng.c,rng.en);t.value=v.slice(0,rng.st)+line+rest+v.slice(rng.en);
+  const pos=rng.st+line.length+rest.length;t.setSelectionRange(pos,pos);hide();t.dispatchEvent(new Event('input',{bubbles:true}));t.focus()}
+['#eLines','#wLines','#sLines'].forEach(id=>{const t=$(id);
+  t.addEventListener('input',e=>{if(e.isTrusted!==false)show(t)});
+  t.addEventListener('click',()=>hide());
+  t.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==t)hide()},150));
+  t.addEventListener('keydown',e=>{if(ac.hidden||tgt!==t)return;
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();idx=(idx+(e.key==='ArrowDown'?1:items.length-1))%items.length;
+      $$('#ac div').forEach((d,i)=>d.classList.toggle('on',i===idx));$$('#ac div')[idx].scrollIntoView({block:'nearest'})}
+    else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();pick(idx)}else if(e.key==='Escape'){e.preventDefault();hide()}})});
+ac.addEventListener('pointerdown',e=>{e.preventDefault();const d=e.target.closest('[data-i]');if(d)pick(+d.dataset.i)});
+window.addEventListener('resize',()=>{if(!ac.hidden)hide()});
+}
 
 /* ---------- collapsible cards ---------- */
 var BOOTED=false;
